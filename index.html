@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analisis Benford Interaktif dari CSV</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        background-color: #f4f7f6;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1000px;
+        margin: 20px auto;
+        background: #ffffff;
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      }
+      h1 {
+        text-align: center;
+        color: #2c3e50;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 10px;
+      }
+      .upload-section {
+        text-align: center;
+        padding: 20px;
+        border: 2px dashed #bdc3c7;
+        border-radius: 8px;
+        background-color: #ecf0f1;
+        margin-bottom: 20px;
+      }
+      .upload-section label {
+        font-weight: bold;
+        font-size: 18px;
+        color: #34495e;
+        cursor: pointer;
+      }
+      .upload-section input[type="file"] {
+        display: none;
+      }
+      #file-status {
+        margin-top: 15px;
+        font-style: italic;
+        color: #27ae60;
+      }
+      .controls {
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: #f8f9f9;
+        border-radius: 8px;
+      }
+      .controls select,
+      .controls button {
+        padding: 12px 15px;
+        border-radius: 6px;
+        border: 1px solid #bdc3c7;
+        font-size: 16px;
+      }
+      .controls button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+      .controls button:disabled {
+        background-color: #a4b0be;
+        cursor: not-allowed;
+      }
+      .controls button:hover:not(:disabled) {
+        background-color: #2980b9;
+      }
+      #hasil-analisis {
+        display: none;
+        margin-top: 20px;
+      }
+      .analysis-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 25px;
+        align-items: flex-start;
+      }
+      .chart-container {
+        padding: 10px;
+      }
+      .stats-container {
+        padding: 20px;
+        background-color: #fdfdfd;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+      }
+      h2 {
+        text-align: center;
+        color: #2c3e50;
+        margin-bottom: 25px;
+      }
+      h3 {
+        color: #34495e;
+        border-bottom: 1px solid #ecf0f1;
+        padding-bottom: 8px;
+        margin-top: 20px;
+      }
+      .stats-container p {
+        line-height: 1.7;
+        font-size: 15px;
+      }
+      #daftar-anomali {
+        margin-top: 15px;
+        max-height: 250px;
+        overflow-y: auto;
+        background-color: #fafafa;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #e0e0e0;
+      }
+      #daftar-anomali ul {
+        list-style-type: none;
+        padding-left: 0;
+        margin: 0;
+      }
+      #daftar-anomali li {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+      }
+      #daftar-anomali li:last-child {
+        border-bottom: none;
+      }
+      .status-badge {
+        padding: 3px 8px;
+        border-radius: 12px;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+      }
+      .status-lolos {
+        background-color: #27ae60;
+      }
+      .status-gagal {
+        background-color: #c0392b;
+      }
+      .status-dekat {
+        background-color: #27ae60;
+      }
+      .status-diterima {
+        background-color: #f39c12;
+      }
+      .status-tidakcocok {
+        background-color: #c0392b;
+      }
+
+      @media (max-width: 800px) {
+        .analysis-grid {
+          grid-template-columns: 1fr;
+        }
+        .controls {
+          flex-direction: column;
+          gap: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Analisis Benford Interaktif dari CSV</h1>
+
+      <div class="upload-section">
+        <label for="csv-file-input">
+          Pilih atau Seret File CSV Anda ke Sini
+        </label>
+        <input type="file" id="csv-file-input" accept=".csv" />
+        <p id="file-status">Belum ada file yang dipilih.</p>
+      </div>
+
+      <div class="controls">
+        <select id="jenis-belanja" disabled></select>
+        <select id="tahun" disabled></select>
+        <button id="tampilkan-analisis" disabled>Tampilkan Analisis</button>
+      </div>
+
+      <div id="hasil-analisis">
+        <h2 id="judul-analisis"></h2>
+        <div class="analysis-grid">
+          <div class="chart-container">
+            <h3>Grafik Distribusi Digit</h3>
+            <canvas id="benford-chart"></canvas>
+          </div>
+          <div class="stats-container">
+            <h3>Hasil Uji Statistik</h3>
+            <p id="hasil-mad"></p>
+            <p id="hasil-chi-square"></p>
+            <p id="hasil-z-test"></p>
+
+            <h3>Daerah dengan Anomali Signifikan (Z-Test)</h3>
+            <div id="daftar-anomali"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // --- JAVASCRIPT UNTUK SEMUA LOGIKA ANALISIS ---
+
+      // Konfigurasi dan konstanta dari skrip Python
+      const BENFORD_DIST_PERCENT = {
+        1: 30.1,
+        2: 17.6,
+        3: 12.5,
+        4: 9.7,
+        5: 7.9,
+        6: 6.7,
+        7: 5.8,
+        8: 5.1,
+        9: 4.6,
+      };
+      const BENFORD_DIST_PROP = Object.fromEntries(
+        Object.entries(BENFORD_DIST_PERCENT).map(([k, v]) => [k, v / 100])
+      );
+      const CHI_SQUARE_CRITICAL_VALUE = 15.507; // df = 8 (9-1)
+      const Z_CRITICAL_VALUE_ONE_SIDED = 1.645;
+      const MAD_CLOSE_CONFORMITY = 0.015;
+      const MAD_ACCEPTABLE_CONFORMITY = 0.022;
+
+      // Variabel global
+      let processedData = [];
+      let benfordChartInstance = null;
+
+      // Elemen DOM
+      const fileInput = document.getElementById("csv-file-input");
+      const fileStatus = document.getElementById("file-status");
+      const belanjaSelect = document.getElementById("jenis-belanja");
+      const tahunSelect = document.getElementById("tahun");
+      const analyzeButton = document.getElementById("tampilkan-analisis");
+      const hasilContainer = document.getElementById("hasil-analisis");
+      const judulAnalisis = document.getElementById("judul-analisis");
+      const hasilMad = document.getElementById("hasil-mad");
+      const hasilChiSquare = document.getElementById("hasil-chi-square");
+      const hasilZTest = document.getElementById("hasil-z-test");
+      const daftarAnomaliContainer = document.getElementById("daftar-anomali");
+
+      fileInput.addEventListener("change", handleFileSelect);
+      analyzeButton.addEventListener("click", runAnalysis);
+
+      function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        fileStatus.textContent = `Memproses file: ${file.name}...`;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const csvText = e.target.result;
+            const parsedData = parseCSV(csvText);
+            processedData = transformData(parsedData);
+            populateFilters(processedData);
+            fileStatus.textContent = `✅ Siap Menganalisis: ${file.name} (${processedData.length} baris data).`;
+          } catch (error) {
+            fileStatus.textContent = `❌ Error: ${error.message}`;
+            alert(`Terjadi kesalahan saat memproses file: ${error.message}`);
+          }
+        };
+        reader.onerror = () => {
+          fileStatus.textContent = "Gagal membaca file.";
+          alert("Tidak dapat membaca file yang dipilih.");
+        };
+        reader.readAsText(file);
+      }
+
+      function parseCSV(text) {
+        const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+        const header = lines[0].split(",").map((h) => h.trim());
+        const data = lines.slice(1).map((line) => {
+          const values = line.split(",");
+          const row = {};
+          header.forEach((col, index) => {
+            row[col] = values[index] ? values[index].trim() : "";
+          });
+          return row;
+        });
+        return data;
+      }
+
+      function transformData(data) {
+        // Fungsi ini meniru 'melt' dari pandas
+        const longData = [];
+        const idVars = ["No.", "Nama Daerah"];
+
+        data.forEach((row) => {
+          Object.keys(row).forEach((columnName) => {
+            if (!idVars.includes(columnName)) {
+              const match = columnName.match(/^(.*\S)\s+(\d{4})$/);
+              if (match) {
+                const nilai_belanja = parseFloat(row[columnName]);
+                if (!isNaN(nilai_belanja) && nilai_belanja > 0) {
+                  longData.push({
+                    "No.": row["No."],
+                    "Nama Daerah": row["Nama Daerah"],
+                    jenis_belanja: match[1].trim(),
+                    tahun: match[2],
+                    nilai_belanja: nilai_belanja,
+                    digit_pertama: parseInt(String(nilai_belanja)[0]),
+                  });
+                }
+              }
+            }
+          });
+        });
+        if (longData.length === 0) {
+          throw new Error(
+            "Tidak ada data valid yang dapat diproses. Periksa format kolom dan nilai di CSV."
+          );
+        }
+        return longData;
+      }
+
+      function populateFilters(data) {
+        const uniqueBelanja = [
+          ...new Set(data.map((item) => item.jenis_belanja)),
+        ].sort();
+        const uniqueTahun = [...new Set(data.map((item) => item.tahun))].sort();
+
+        belanjaSelect.innerHTML = uniqueBelanja
+          .map((b) => `<option value="${b}">${b}</option>`)
+          .join("");
+        tahunSelect.innerHTML = uniqueTahun
+          .map((t) => `<option value="${t}">${t}</option>`)
+          .join("");
+
+        belanjaSelect.disabled = false;
+        tahunSelect.disabled = false;
+        analyzeButton.disabled = false;
+      }
+
+      function runAnalysis() {
+        const selectedBelanja = belanjaSelect.value;
+        const selectedTahun = tahunSelect.value;
+
+        const filteredData = processedData.filter(
+          (d) =>
+            d.jenis_belanja === selectedBelanja && d.tahun === selectedTahun
+        );
+
+        if (filteredData.length < 50) {
+          alert(
+            `Peringatan: Jumlah data hanya ${filteredData.length}. Hasil statistik mungkin kurang akurat.`
+          );
+          if (filteredData.length === 0) {
+            alert("Tidak ada data untuk kombinasi ini.");
+            return;
+          }
+        }
+
+        const stats = calculateBenfordStats(filteredData);
+        updateUI(stats, selectedBelanja, selectedTahun);
+      }
+
+      function calculateBenfordStats(data) {
+        const totalData = data.length;
+        const observedCounts = {};
+        for (let i = 1; i <= 9; i++) observedCounts[i] = 0;
+        data.forEach((d) => {
+          observedCounts[d.digit_pertama]++;
+        });
+
+        let madTotal = 0;
+        let chiSquareTotal = 0;
+        const zTestResults = {};
+        const observedProps = {};
+
+        for (let digit = 1; digit <= 9; digit++) {
+          const observedCount = observedCounts[digit];
+          const observedProp = observedCount / totalData;
+          observedProps[digit] = observedProp;
+          const expectedProp = BENFORD_DIST_PROP[digit];
+          const expectedCount = expectedProp * totalData;
+
+          madTotal += Math.abs(observedProp - expectedProp);
+          if (expectedCount > 0) {
+            chiSquareTotal +=
+              Math.pow(observedCount - expectedCount, 2) / expectedCount;
+          }
+
+          const z_denominator = Math.sqrt(
+            (expectedProp * (1 - expectedProp)) / totalData
+          );
+          zTestResults[digit] =
+            z_denominator > 0
+              ? (observedProp - expectedProp) / z_denominator
+              : 0;
+        }
+
+        const madResult = madTotal / 9;
+        const significantZDigits = Object.keys(zTestResults).filter(
+          (d) => zTestResults[d] > Z_CRITICAL_VALUE_ONE_SIDED
+        );
+
+        const anomalousRegions = {};
+        if (significantZDigits.length > 0) {
+          significantZDigits.forEach((digit) => {
+            anomalousRegions[digit] = data
+              .filter((d) => d.digit_pertama == digit)
+              .map((d) => ({
+                daerah: d["Nama Daerah"],
+                nilai: d.nilai_belanja,
+              }));
+          });
+        }
+
+        return {
+          totalData,
+          observedCounts,
+          observedProps,
+          mad: madResult,
+          chiSquare: chiSquareTotal,
+          zTestResults,
+          significantZDigits,
+          anomalousRegions,
+        };
+      }
+
+      function updateUI(stats, belanja, tahun) {
+        judulAnalisis.textContent = `Hasil Analisis: ${belanja} - Tahun ${tahun}`;
+
+        // Update MAD
+        let madConformity, madClass;
+        if (stats.mad <= MAD_CLOSE_CONFORMITY) {
+          madConformity = "Kecocokan Dekat";
+          madClass = "status-dekat";
+        } else if (stats.mad <= MAD_ACCEPTABLE_CONFORMITY) {
+          madConformity = "Kecocokan Dapat Diterima";
+          madClass = "status-diterima";
+        } else {
+          madConformity = "Tidak Cocok";
+          madClass = "status-tidakcocok";
+        }
+        hasilMad.innerHTML = `<strong>MAD:</strong> ${stats.mad.toFixed(
+          6
+        )} <span class="status-badge ${madClass}">${madConformity}</span>`;
+
+        // Update Chi-Square
+        const chiConformity =
+          stats.chiSquare <= CHI_SQUARE_CRITICAL_VALUE ? "LOLOS" : "GAGAL";
+        const chiClass =
+          chiConformity === "LOLOS" ? "status-lolos" : "status-gagal";
+        hasilChiSquare.innerHTML = `<strong>Uji Chi-Square (χ²):</strong> ${stats.chiSquare.toFixed(
+          4
+        )} <span class="status-badge ${chiClass}">${chiConformity}</span>`;
+
+        // Update Z-Test
+        if (stats.significantZDigits.length > 0) {
+          hasilZTest.innerHTML = `<strong>Uji Z:</strong> Frekuensi lebih tinggi signifikan pada digit: <strong>${stats.significantZDigits.join(
+            ", "
+          )}</strong>`;
+        } else {
+          hasilZTest.innerHTML =
+            "<strong>Uji Z:</strong> Tidak ada anomali frekuensi yang signifikan.";
+        }
+
+        // Update Anomaly List
+        daftarAnomaliContainer.innerHTML = "";
+        if (Object.keys(stats.anomalousRegions).length > 0) {
+          const list = document.createElement("ul");
+          Object.entries(stats.anomalousRegions).forEach(([digit, regions]) => {
+            regions.forEach((r) => {
+              const item = document.createElement("li");
+              item.textContent = `[Digit ${digit}] ${
+                r.daerah
+              } (Nilai: ${r.nilai.toLocaleString("id-ID")})`;
+              list.appendChild(item);
+            });
+          });
+          daftarAnomaliContainer.appendChild(list);
+        } else {
+          daftarAnomaliContainer.innerHTML =
+            "<p>Tidak ada daerah spesifik yang terdeteksi anomali.</p>";
+        }
+
+        renderChart(stats.observedProps);
+        hasilContainer.style.display = "block";
+      }
+
+      function renderChart(observedProps) {
+        const ctx = document.getElementById("benford-chart").getContext("2d");
+        const labels = Object.keys(BENFORD_DIST_PERCENT);
+        const observedValues = labels.map((d) =>
+          (observedProps[d] * 100).toFixed(2)
+        );
+        const benfordValues = Object.values(BENFORD_DIST_PERCENT);
+
+        if (benfordChartInstance) {
+          benfordChartInstance.destroy();
+        }
+
+        benfordChartInstance = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Observasi (%)",
+                data: observedValues,
+                backgroundColor: "rgba(75, 192, 192, 0.6)",
+                borderColor: "rgba(75, 192, 192, 1)",
+                borderWidth: 1,
+              },
+              {
+                label: "Hukum Benford (Ideal) (%)",
+                data: benfordValues,
+                backgroundColor: "rgba(255, 159, 64, 0.6)",
+                borderColor: "rgba(255, 159, 64, 1)",
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: "Frekuensi (%)",
+                },
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: "Digit Pertama",
+                },
+              },
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return `${context.dataset.label}: ${context.raw}%`;
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+    </script>
+  </body>
+</html>
